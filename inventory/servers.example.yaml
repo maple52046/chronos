@@ -1,0 +1,28 @@
+# Server inventory（範本）
+#
+# 這是提交進 git 的「結構範本」，不含真實節點。
+# 真實清單請複製成同層的 servers.yaml（已被 .gitignore，不會進版控）：
+#
+#   cp inventory/servers.example.yaml inventory/servers.yaml
+#
+# 欄位語意對齊 ssh client config（host / user / identity file）。
+# 不要在這裡放任何 secret（私鑰內容、密碼、token）。key 只放「路徑」。
+
+servers:
+  - name: example-direct        # 邏輯名稱（≈ ssh config 的 Host）
+    host: server.example.com    # 連線目標（≈ HostName）
+    port: 22
+    user: youruser
+    key: ~/.ssh/id_ed25519      # 私鑰「路徑」，非內容
+    tags: [example]
+    notes: 直連的一般節點
+
+  - name: example-tunnel        # 經 wstunnel 的節點範例
+    host: 127.0.0.1             # ssh 實際連本機 listener
+    port: 2222
+    user: youruser
+    key: ~/.ssh/id_ed25519
+    tags: [example, wstunnel]
+    via: wstunnel               # 走隧道；server/client 設定見 knowledge/ops/wstunnel/
+    host_key_alias: real.example.com   # ≈ ssh config 的 HostKeyAlias
+    notes: SSH over WebSocket（見 knowledge/ops/wstunnel/client.md）

@@ -1,0 +1,21 @@
+[Unit]
+Description=Chronos Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chronos
+Group=chronos
+ExecStart=/usr/local/bin/chronos-server --config /etc/chronos/server.yaml
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/chronos
+
+[Install]
+WantedBy=multi-user.target

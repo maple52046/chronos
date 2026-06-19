@@ -1,0 +1,10 @@
+[package]
+name = "chronos-ntp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Reserved placeholder for the Chronos v2 NTP output backends."
+
+[dependencies]

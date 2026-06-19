@@ -1,0 +1,19 @@
+server:
+  listen: "127.0.0.1:8080"
+
+tls:
+  enabled: false
+  cert_file: null
+  key_file: null
+
+api:
+  cache_control: "no-store"
+
+time_status:
+  provider: "chrony"
+  chronyc_path: "/usr/bin/chronyc"
+  allow_unknown_status: false
+
+logging:
+  level: "info"
+  format: "json"

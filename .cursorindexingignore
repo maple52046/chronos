@@ -1,0 +1,5 @@
+# Historical, consolidated plans: exclude from indexing/auto-context to avoid
+# wasting tokens. They remain readable on disk when a task explicitly needs one.
+# The manuscripts/ working area (drafts + consolidation spec) is intentionally
+# NOT ignored.
+docs/plans/*.md

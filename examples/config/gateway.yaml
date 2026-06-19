@@ -1,0 +1,28 @@
+backends:
+  - name: "primary"
+    url: "https://time.example.com/time"
+    require_tls: true
+    require_valid_cert: true
+
+sampling:
+  interval_seconds: 30
+  burst_samples: 5
+  min_good_samples: 3
+  max_rtt_ms: 300
+  outlier_threshold_ms: 100
+
+chrony:
+  sock_path: "/run/chronos/chrony.sock"
+  refid: "CHRO"
+
+security:
+  allow_plain_http_backends: false
+  allow_plain_http_loopback: true
+  pinned_spki: []
+
+status:
+  listen: "127.0.0.1:9090"
+
+logging:
+  level: "info"
+  format: "json"

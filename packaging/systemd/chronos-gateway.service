@@ -1,0 +1,21 @@
+[Unit]
+Description=Chronos Gateway
+After=network-online.target chronyd.service
+Wants=network-online.target chronyd.service
+
+[Service]
+Type=simple
+User=chronos
+Group=chronos
+ExecStart=/usr/local/bin/chronos-gateway --config /etc/chronos/gateway.yaml
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/chronos
+
+[Install]
+WantedBy=multi-user.target

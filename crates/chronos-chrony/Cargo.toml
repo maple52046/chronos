@@ -1,0 +1,11 @@
+[package]
+name = "chronos-chrony"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "chrony SOCK refclock output backend for Chronos."
+
+[dependencies]
+chronos-core.workspace = true

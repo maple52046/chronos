@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/chronos-core",
+    "crates/chronos-server",
+    "crates/chronos-gateway",
+    "crates/chronos-chrony",
+    "crates/chronos-ntp",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/maple52046/chronos"
+rust-version = "1.90"
+
+[workspace.dependencies]
+chronos-core = { path = "crates/chronos-core" }
+chronos-chrony = { path = "crates/chronos-chrony" }

@@ -1,0 +1,13 @@
+[package]
+name = "chronos-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Domain types, ports, and pure time-synchronization logic for Chronos."
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+thiserror = "2.0.18"

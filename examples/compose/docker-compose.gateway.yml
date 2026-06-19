@@ -1,0 +1,27 @@
+services:
+  chronos-gateway:
+    image: ghcr.io/maple52046/chronos:v1-20260619143005
+    container_name: chronos-gateway
+    restart: unless-stopped
+    command: ["chronos-gateway", "--config", "/etc/chronos/gateway.yaml"]
+    network_mode: host
+    volumes:
+      - ./gateway.yaml:/etc/chronos/gateway.yaml:ro
+      - /run/chronos:/run/chronos
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9090/healthz"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+# Notes:
+#   1. chronyd should run on the host.
+#   2. chronos-gateway writes to the host chrony socket at /run/chronos.
+#   3. the container does not need CAP_SYS_TIME.
+#   4. the container never adjusts the system clock directly.
+# If socket permissions are difficult, run chronos-gateway as a host systemd
+# service instead of a container.

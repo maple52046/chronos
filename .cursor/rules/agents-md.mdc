@@ -1,0 +1,11 @@
+---
+description: Read and follow the repository's AGENTS.md before any development work.
+alwaysApply: true
+---
+
+# Follow AGENTS.md
+
+Before writing or modifying any code (or other project artifacts) in this
+repository, read the root [`AGENTS.md`](../../AGENTS.md) and follow the project
+standards it points to (architecture, Python/Shell style, comment content, and
+the others listed there).

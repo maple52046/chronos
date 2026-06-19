@@ -1,0 +1,21 @@
+---
+description: Project plan file convention
+alwaysApply: true
+---
+
+# Project Plan File Convention
+
+When creating or updating implementation plans for this codebase:
+
+- Do not store project plans only in Cursor's default user-level plan storage.
+- Save all project-level plan manuscripts under:
+
+  `docs/plans/manuscripts/`
+
+- Use Markdown files.
+- File naming convention:
+
+  `YYYYMMDD-<short-topic>.md`
+
+- Before implementation, create or update the relevant plan file first.
+- If a plan already exists for the same topic, update the existing file instead of creating a duplicate.

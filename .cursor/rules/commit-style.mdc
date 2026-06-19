@@ -1,0 +1,13 @@
+---
+description: When writing commit messages, follow Conventional Commits 1.0.0.
+alwaysApply: false
+---
+
+# Commit Style
+
+When creating a git commit, follow
+[`docs/standards/conventional-commits.md`](../../docs/standards/conventional-commits.md):
+use the `<type>[scope][!]: <description>` format, with type being feat/fix/docs/refactor/test/...,
+scope being a module, package, or core subsystem, and breaking changes marked with `!` or a `BREAKING CHANGE:` footer.
+
+Commit messages MUST be written in English, regardless of the chat language.
