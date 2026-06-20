@@ -99,19 +99,35 @@ EOF
 )"
 ```
 
-**`--date <when>`: keep author/committer date consistent.** `git commit --date` only changes the author date;
-the committer date is controlled separately by the `GIT_COMMITTER_DATE` environment variable. When backdating, pass **the same value** to both:
+**`--date <when>`: keep author/committer date consistent.** `git commit --date`
+only changes the author date; the committer date is controlled separately by the
+`GIT_COMMITTER_DATE` environment variable. Both must receive the **same value**.
+
+**Always normalize `<when>` to an absolute timestamp first.** `git commit --date`
+accepts relative/approxidate input (e.g. `'90 minutes ago'`, `'8 hours ago'`),
+but `GIT_COMMITTER_DATE` does **not** — it rejects relative formats with
+`fatal: invalid date format`. So convert `<when>` once and reuse the result for
+both, regardless of whether the user gave a relative or absolute value:
 
 ```bash
-GIT_COMMITTER_DATE='<when>' git commit --date='<when>' -m "$(cat <<'EOF'
+# Resolve to an absolute, git-parseable timestamp (GNU date).
+WHEN="$(date -d "<when>" '+%Y-%m-%d %H:%M:%S %z')"
+GIT_COMMITTER_DATE="${WHEN}" git commit --date="${WHEN}" -m "$(cat <<'EOF'
 <type>(<scope>): <description>
 EOF
 )"
 ```
 
-- `<when>` uses a git-parseable format (e.g. `'12 hours ago'`, `'2026-06-10 13:00 +0800'`).
-- Only when `GIT_COMMITTER_DATE` and `--date` use the same value will the resulting commit's author/committer dates be consistent.
-- This only affects the commit being **newly created** this time; it **does not rewrite existing history**.
+- `<when>` may be relative (`'90 minutes ago'`) or absolute
+  (`'2026-06-10 13:00 +0800'`); `date -d` accepts both and emits one absolute
+  value, sidestepping the `GIT_COMMITTER_DATE` relative-format limitation.
+- On systems without GNU `date` (e.g. BSD/macOS), resolve `<when>` to an absolute
+  `YYYY-MM-DD HH:MM:SS +ZZZZ` string by other means, then pass it to both.
+- Only when `GIT_COMMITTER_DATE` and `--date` use the same value will the
+  resulting commit's author/committer dates be consistent.
+- This only affects the commit being **newly created** this time; it **does not
+  rewrite existing history**.
+- Verify with `git log -1 --pretty=fuller` that AuthorDate and CommitDate match.
 
 - If there is a pre-commit hook:
   - hook fails → fix the problem and **create a new commit** (do not `--amend`).
