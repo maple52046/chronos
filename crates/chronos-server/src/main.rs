@@ -48,14 +48,19 @@ async fn main() -> anyhow::Result<()> {
         config.api.cache_control.clone(),
         config.time_status.allow_unknown_status,
     );
-    let app = router(state);
+    let app = router(state, &config.api.base_path);
 
     let addr: SocketAddr = config
         .server
         .listen
         .parse()
         .with_context(|| format!("parsing listen address {}", config.server.listen))?;
-    tracing::info!(%addr, tls = config.tls.enabled, "chronos-server listening");
+    let base_path = if config.api.base_path.is_empty() {
+        "/"
+    } else {
+        &config.api.base_path
+    };
+    tracing::info!(%addr, tls = config.tls.enabled, base_path, "chronos-server listening");
 
     if config.tls.enabled {
         let cert_file = config

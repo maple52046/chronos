@@ -133,7 +133,7 @@ sKwsujLyE0Ku/cUve8rRF7iq
         std::fs::write(&key_path, TEST_KEY).expect("write key");
 
         let state = AppState::new(Arc::new(SyncedProvider), "no-store", false);
-        let app = router(state);
+        let app = router(state, "");
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("reserve port");
         let addr = listener.local_addr().expect("addr");
         drop(listener);

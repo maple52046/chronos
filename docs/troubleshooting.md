@@ -37,6 +37,13 @@
 - `require_tls … is not https`: the backend URL is `http://` but `require_tls:
   true`.
 
+## Sampling fails with HTTP 404
+
+- The gateway `base_url` and the server `api.base_path` disagree. The gateway
+  requests `<base_url>/time`, so when the server is mounted under `/chronos` the
+  `base_url` must end in `/chronos`. Confirm with
+  `curl -fsS <base_url>/time`.
+
 ## TLS errors when sampling
 
 - The sample quality logs as `TlsError`. Verify the certificate chain and that

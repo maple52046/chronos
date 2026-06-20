@@ -15,6 +15,7 @@ tls:
   enabled: false
 api:
   cache_control: "no-store"
+  base_path: ""        # e.g. "/chronos" to mount under a shared reverse proxy
 time_status:
   provider: "chrony"
   chronyc_path: "/usr/bin/chronyc"
@@ -61,6 +62,12 @@ Use the native-HTTP config above and the shipped Nginx server block
 ([`packaging/nginx/chronos-server.conf`](../packaging/nginx/chronos-server.conf)),
 which forwards only `/time`, `/healthz`, and `/status`, disables caching, and
 sets `Cache-Control: no-store`.
+
+To share one Nginx server block with other services, set `api.base_path` (e.g.
+`/chronos`) and use the prefixed `location /chronos/` variant in that file; the
+prefix is preserved upstream so the server must be configured with the matching
+`api.base_path`. Point the gateway's `base_url` at the same prefix
+(`https://time.example.com/chronos`).
 
 ## systemd
 

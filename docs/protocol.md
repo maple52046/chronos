@@ -4,6 +4,12 @@
 `Content-Type: application/json` and carry `Cache-Control: no-store` (configurable
 via `api.cache_control`) so intermediaries never serve stale time.
 
+The paths below are relative to the configured `api.base_path`. With the default
+(empty) prefix they are served at the root (`/time`); setting
+`api.base_path: "/chronos"` serves them under that prefix
+(`/chronos/time`, `/chronos/healthz`, `/chronos/status`), which lets the server
+share one reverse proxy with other services.
+
 ## `GET /time`
 
 ```json

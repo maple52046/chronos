@@ -35,8 +35,10 @@ pub struct GatewayConfig {
 pub struct BackendConfig {
     /// Operator-facing identifier used in logs and the status endpoint.
     pub name: String,
-    /// Absolute URL of the backend `/time` endpoint.
-    pub url: String,
+    /// Base URL of the Chronos server, including any path prefix but not the
+    /// endpoint, e.g. `https://time.example.com` or
+    /// `https://time.example.com/chronos`. The gateway appends `/time`.
+    pub base_url: String,
     /// Whether this backend must be reached over TLS.
     #[serde(default = "default_true")]
     pub require_tls: bool,
@@ -230,7 +232,7 @@ mod tests {
         let yaml = r#"
 backends:
   - name: "primary"
-    url: "https://time.example.com/time"
+    base_url: "https://time.example.com"
     require_tls: true
     require_valid_cert: true
 sampling:
@@ -263,7 +265,7 @@ logging:
         let yaml = r#"
 backends:
   - name: "lab"
-    url: "http://192.168.100.10:8080/time"
+    base_url: "http://192.168.100.10:8080"
     require_tls: false
     require_valid_cert: false
 chrony:
@@ -284,7 +286,7 @@ security:
         let yaml = r#"
 backends:
   - name: "primary"
-    url: "https://time.example.com/time"
+    base_url: "https://time.example.com"
 chrony:
   sock_path: "/run/chronos/chrony.sock"
 security:
@@ -300,7 +302,7 @@ security:
         let yaml = r#"
 backends:
   - name: "primary"
-    url: "https://time.example.com/time"
+    base_url: "https://time.example.com"
 chrony:
   sock_path: "/run/chronos/chrony.sock"
 security:
@@ -316,7 +318,7 @@ security:
         let yaml = r#"
 backends:
   - name: "primary"
-    url: "https://time.example.com/time"
+    base_url: "https://time.example.com"
 sampling:
   burst_samples: 3
   min_good_samples: 5

@@ -200,7 +200,7 @@ mod tests {
     fn client(name: &str, uri: String) -> BackendClient {
         let config = BackendConfig {
             name: name.to_string(),
-            url: format!("{uri}/time"),
+            base_url: uri,
             require_tls: false,
             require_valid_cert: false,
         };

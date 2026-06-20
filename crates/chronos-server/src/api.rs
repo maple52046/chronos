@@ -35,13 +35,23 @@ impl AppState {
     }
 }
 
-/// Builds the Time API router with `/time`, `/healthz`, and `/status` routes.
-pub fn router(state: AppState) -> Router {
-    Router::new()
+/// Builds the Time API router with `/time`, `/healthz`, and `/status` routes,
+/// optionally mounted under `base_path` (e.g. `/chronos`).
+///
+/// An empty `base_path` serves the routes at the root; a non-empty prefix is
+/// expected in canonical form (leading slash, no trailing slash) as produced by
+/// [`crate::config::ApiConfig`].
+pub fn router(state: AppState, base_path: &str) -> Router {
+    let routes = Router::new()
         .route("/time", get(time))
         .route("/healthz", get(healthz))
         .route("/status", get(status))
-        .with_state(state)
+        .with_state(state);
+    if base_path.is_empty() {
+        routes
+    } else {
+        Router::new().nest(base_path, routes)
+    }
 }
 
 /// `GET /time` response body, API version 1.
@@ -167,12 +177,17 @@ mod tests {
     }
 
     async fn spawn(state: AppState) -> SocketAddr {
+        spawn_with_prefix(state, "").await
+    }
+
+    async fn spawn_with_prefix(state: AppState, base_path: &str) -> SocketAddr {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind ephemeral port");
         let addr = listener.local_addr().expect("local addr");
+        let app = router(state, base_path);
         tokio::spawn(async move {
-            axum::serve(listener, router(state)).await.expect("serve");
+            axum::serve(listener, app).await.expect("serve");
         });
         addr
     }
@@ -231,6 +246,22 @@ mod tests {
         assert_eq!(body["service"], "chronos-server");
         assert_eq!(body["state"], "running");
         assert_eq!(body["time_status"]["sync"], "synchronized");
+    }
+
+    #[tokio::test]
+    async fn routes_are_served_under_base_path() {
+        let addr = spawn_with_prefix(synced_state(), "/chronos").await;
+        let prefixed: serde_json::Value = reqwest::get(format!("http://{addr}/chronos/time"))
+            .await
+            .expect("request")
+            .json()
+            .await
+            .expect("json body");
+        assert_eq!(prefixed["version"], 1);
+        let unprefixed = reqwest::get(format!("http://{addr}/time"))
+            .await
+            .expect("request");
+        assert_eq!(unprefixed.status(), reqwest::StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

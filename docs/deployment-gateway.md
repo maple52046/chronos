@@ -64,6 +64,10 @@ sections: `backends` (ordered; earlier entries preferred), `sampling`
 `outlier_threshold_ms`), `chrony` (`sock_path`, `refid`), `security`, and
 `status` (`listen`). See [`security.md`](security.md) for the transport policy.
 
+Each backend's `base_url` is the Chronos server's base URL without the endpoint;
+the gateway appends `/time`. Include the server's `api.base_path` when set, e.g.
+`base_url: "https://time.example.com/chronos"`.
+
 ## Internal client setup
 
 Point internal servers at the gateway's NTP service (the gateway host running

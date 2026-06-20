@@ -54,15 +54,17 @@ impl BackendClient {
         request_timeout: Duration,
         pinned_spki: &[String],
     ) -> anyhow::Result<Self> {
-        let url = Url::parse(&config.url)
-            .with_context(|| format!("parsing backend URL {}", config.url))?;
-        let transport = classify_transport(&url);
+        let base_url = Url::parse(&config.base_url)
+            .with_context(|| format!("parsing backend base URL {}", config.base_url))?;
+        let url = time_endpoint_url(&base_url)
+            .with_context(|| format!("building /time URL from base {}", config.base_url))?;
+        let transport = classify_transport(&base_url);
 
         if config.require_tls && !matches!(transport, BackendTransport::Https) {
             anyhow::bail!(
-                "backend {} sets require_tls but URL {} is not https",
+                "backend {} sets require_tls but base URL {} is not https",
                 config.name,
-                config.url
+                config.base_url
             );
         }
         policy
@@ -159,6 +161,24 @@ impl BackendClient {
             quality: SampleQuality::Good,
         })
     }
+}
+
+/// Appends the `time` endpoint segment to a backend base URL.
+///
+/// The base path is preserved (so a `/chronos` prefix yields `/chronos/time`);
+/// a trailing slash on the base is collapsed rather than producing `//time`.
+fn time_endpoint_url(base_url: &Url) -> anyhow::Result<Url> {
+    let mut url = base_url.clone();
+    {
+        let mut segments = url
+            .path_segments_mut()
+            .map_err(|()| anyhow::anyhow!("backend base URL cannot have path segments"))?;
+        // A trailing slash yields a trailing empty segment; drop it so the join
+        // produces `<base>/time` rather than `<base>//time`.
+        segments.pop_if_empty();
+        segments.push("time");
+    }
+    Ok(url)
 }
 
 /// Classifies a backend URL into a [`BackendTransport`] for policy evaluation.
@@ -312,10 +332,10 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    fn loopback_backend(url: String) -> BackendConfig {
+    fn loopback_backend(base_url: String) -> BackendConfig {
         BackendConfig {
             name: "lab".to_string(),
-            url,
+            base_url,
             require_tls: false,
             require_valid_cert: false,
         }
@@ -380,7 +400,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
     fn https_backend_with_pins_builds_client() {
         let config = BackendConfig {
             name: "primary".to_string(),
-            url: "https://time.example.com/time".to_string(),
+            base_url: "https://time.example.com".to_string(),
             require_tls: true,
             require_valid_cert: true,
         };
@@ -392,6 +412,47 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
             &pins
         )
         .is_ok());
+    }
+
+    #[test]
+    fn time_endpoint_url_appends_time_to_base() {
+        let cases = [
+            ("https://time.example.com", "https://time.example.com/time"),
+            ("https://time.example.com/", "https://time.example.com/time"),
+            (
+                "https://time.example.com/chronos",
+                "https://time.example.com/chronos/time",
+            ),
+            (
+                "https://time.example.com/chronos/",
+                "https://time.example.com/chronos/time",
+            ),
+        ];
+        for (base, expected) in cases {
+            let url = time_endpoint_url(&Url::parse(base).unwrap()).expect("join");
+            assert_eq!(url.as_str(), expected, "base {base}");
+        }
+    }
+
+    #[tokio::test]
+    async fn fetch_targets_prefixed_time_path() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/chronos/time"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(time_body("synchronized")))
+            .mount(&server)
+            .await;
+
+        let config = loopback_backend(format!("{}/chronos", server.uri()));
+        let client = BackendClient::new(
+            &config,
+            SecurityPolicy::default(),
+            Duration::from_secs(2),
+            &[],
+        )
+        .unwrap();
+        let sample = client.fetch_sample().await.expect("good sample");
+        assert_eq!(sample.quality, SampleQuality::Good);
     }
 
     #[test]
@@ -418,7 +479,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
     fn remote_http_rejected_by_default_policy() {
         let config = BackendConfig {
             name: "remote".to_string(),
-            url: "http://192.168.100.10:8080/time".to_string(),
+            base_url: "http://192.168.100.10:8080".to_string(),
             require_tls: false,
             require_valid_cert: false,
         };
@@ -435,7 +496,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
     fn remote_http_allowed_when_policy_permits() {
         let config = BackendConfig {
             name: "remote".to_string(),
-            url: "http://192.168.100.10:8080/time".to_string(),
+            base_url: "http://192.168.100.10:8080".to_string(),
             require_tls: false,
             require_valid_cert: false,
         };
@@ -450,7 +511,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
     fn require_tls_rejects_plain_http() {
         let config = BackendConfig {
             name: "primary".to_string(),
-            url: "http://127.0.0.1:8080/time".to_string(),
+            base_url: "http://127.0.0.1:8080".to_string(),
             require_tls: true,
             require_valid_cert: true,
         };
@@ -472,7 +533,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
             .mount(&server)
             .await;
 
-        let config = loopback_backend(format!("{}/time", server.uri()));
+        let config = loopback_backend(server.uri());
         let client = BackendClient::new(
             &config,
             SecurityPolicy::default(),
@@ -494,7 +555,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
             .mount(&server)
             .await;
 
-        let config = loopback_backend(format!("{}/time", server.uri()));
+        let config = loopback_backend(server.uri());
         let client = BackendClient::new(
             &config,
             SecurityPolicy::default(),
@@ -517,7 +578,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
             .mount(&server)
             .await;
 
-        let config = loopback_backend(format!("{}/time", server.uri()));
+        let config = loopback_backend(server.uri());
         let client = BackendClient::new(
             &config,
             SecurityPolicy::default(),
@@ -540,7 +601,7 @@ mMUPKpNMKl6dXU2OWoxqBH1nMJ+QhnUDRPeJGz8ifDFrto3pSF9t63GORQ==
             .mount(&server)
             .await;
 
-        let config = loopback_backend(format!("{}/time", server.uri()));
+        let config = loopback_backend(server.uri());
         let client = BackendClient::new(
             &config,
             SecurityPolicy::default(),

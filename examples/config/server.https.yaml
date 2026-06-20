@@ -8,6 +8,10 @@ tls:
 
 api:
   cache_control: "no-store"
+  # Mount the API under a path prefix to share one reverse proxy with other
+  # services, e.g. "/chronos" serves /chronos/time, /chronos/healthz, ...
+  # Empty (the default) serves at the root.
+  base_path: ""
 
 time_status:
   provider: "chrony"

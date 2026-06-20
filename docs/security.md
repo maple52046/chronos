@@ -75,7 +75,8 @@ The shipped server block
 should:
 
 1. terminate TLS;
-2. forward only `/time`, `/healthz`, `/status`;
+2. forward only `/time`, `/healthz`, `/status` (under the server's
+   `api.base_path` prefix when one is configured, e.g. `/chronos/time`);
 3. disable caching and set `Cache-Control: no-store` for `/time`;
 4. optionally apply a source-IP allowlist (`allow`/`deny`);
 5. optionally require client certificates (mTLS) for `/time`.

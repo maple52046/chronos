@@ -68,11 +68,12 @@ See [`chrony-integration.md`](chrony-integration.md).
 
 ### `chronos-server` (composition root)
 
-An `axum` application exposing `/time`, `/healthz`, and `/status`. It supports
-three transport modes (native HTTP, native HTTPS via `axum-server` + `rustls`,
-and HTTP behind a reverse proxy). Synchronization status comes from a
-`TimeStatusProvider` — the v1 implementation shells out to `chronyc tracking`.
-See [`deployment-server.md`](deployment-server.md).
+An `axum` application exposing `/time`, `/healthz`, and `/status`, optionally
+mounted under a configurable `api.base_path` prefix (e.g. `/chronos`) for sharing
+a reverse proxy. It supports three transport modes (native HTTP, native HTTPS via
+`axum-server` + `rustls`, and HTTP behind a reverse proxy). Synchronization
+status comes from a `TimeStatusProvider` — the v1 implementation shells out to
+`chronyc tracking`. See [`deployment-server.md`](deployment-server.md).
 
 ### `chronos-gateway` (composition root)
 

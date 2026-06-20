@@ -8,6 +8,8 @@ services:
       - ./server.yaml:/etc/chronos/server.yaml:ro
     ports:
       - "127.0.0.1:8080:8080"
+    # When server.yaml sets api.base_path (e.g. "/chronos"), update the
+    # healthcheck path to match, e.g. http://127.0.0.1:8080/chronos/healthz.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
       interval: 30s
