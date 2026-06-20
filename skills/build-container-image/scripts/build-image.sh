@@ -65,20 +65,35 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." >/dev/null 2>&1 && pwd)"
 
+# The software version is needed both for the default tag and for the
+# org.opencontainers.image.version label, so resolve it unconditionally.
+VERSION="$(grep -m1 '^version' "${REPO_ROOT}/Cargo.toml" | cut -d'"' -f2)"
+if [[ -z "${VERSION}" ]]; then
+    echo "error: could not read workspace.package.version from Cargo.toml" >&2
+    exit 1
+fi
+
 if [[ -z "${TAG}" ]]; then
-    VERSION="$(grep -m1 '^version' "${REPO_ROOT}/Cargo.toml" | cut -d'"' -f2)"
-    if [[ -z "${VERSION}" ]]; then
-        echo "error: could not read workspace.package.version from Cargo.toml" >&2
-        exit 1
-    fi
     TS="$(date -u +%Y%m%d%H%M%S)"
     TAG="${VERSION}-${TS}"
 fi
 
 IMAGE="${REPO}:${TAG}"
 
-echo "Building image: ${IMAGE}"
-docker build -t "${IMAGE}" "${REPO_ROOT}"
+# Per-build OCI label values passed through to the Dockerfile runtime stage.
+REVISION="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+if [[ "${REVISION}" != "unknown" ]] && ! git -C "${REPO_ROOT}" diff --quiet HEAD 2>/dev/null; then
+    REVISION="${REVISION}-dirty"
+fi
+CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+echo "Building image: ${IMAGE} (revision=${REVISION}, created=${CREATED})"
+docker build \
+    --build-arg "VERSION=${VERSION}" \
+    --build-arg "REVISION=${REVISION}" \
+    --build-arg "CREATED=${CREATED}" \
+    -t "${IMAGE}" \
+    "${REPO_ROOT}"
 
 if [[ "${PUSH}" -eq 1 ]]; then
     echo "Pushing image: ${IMAGE}"

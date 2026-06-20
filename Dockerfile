@@ -33,6 +33,24 @@ RUN cargo build --release --locked --bin chronos-server
 RUN cargo build --release --locked --bin chronos-gateway
 
 FROM ${RUNTIME_IMAGE} AS runtime
+
+# Build-time metadata for the per-build OCI labels below. Defaults keep `docker
+# build` usable on its own; build-image.sh overrides them via --build-arg.
+ARG VERSION="0.0.0-dev"
+ARG REVISION="unknown"
+ARG CREATED="2026-06-19T13:23:20Z"
+
+LABEL org.opencontainers.image.title="Chronos" \
+      org.opencontainers.image.description="HTTP-backend time synchronization gateway (chronos-server and chronos-gateway)." \
+      org.opencontainers.image.source="https://github.com/maple52046/chronos" \
+      org.opencontainers.image.url="https://github.com/maple52046/chronos" \
+      org.opencontainers.image.documentation="https://github.com/maple52046/chronos/blob/main/README.md" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="maple52046" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.created="${CREATED}"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates tzdata curl \
     && rm -rf /var/lib/apt/lists/*

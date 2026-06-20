@@ -42,11 +42,12 @@ through.
 
 ```
 - [ ] 1. Parse flags; reject any --oci other than docker (exit 2)
-- [ ] 2. Resolve version (Cargo.toml) and ts (UTC) when --tag is empty
+- [ ] 2. Resolve version (Cargo.toml); derive ts (UTC) for the tag when --tag is empty
 - [ ] 3. Build the image reference: ${repo}:${tag}
-- [ ] 4. Run docker build with the repository root as context
-- [ ] 5. --push: docker push after a successful build
-- [ ] 6. Print the final image reference and whether it was pushed
+- [ ] 4. Resolve build-time label values: version, git revision, created (UTC)
+- [ ] 5. Run docker build with the repository root as context, passing the labels as --build-arg
+- [ ] 6. --push: docker push after a successful build
+- [ ] 7. Print the final image reference and whether it was pushed
 ```
 
 - `--oci`: only `docker` is accepted; any other value exits with an error.
@@ -55,6 +56,21 @@ through.
 - `ts`: `date -u +%Y%m%d%H%M%S` (UTC), only used when `--tag` is empty.
 - `tag`: `--tag` verbatim when given, else `${version}-${ts}`.
 - Final reference example: `ghcr.io/maple52046/chronos:1.0.0-20260619234500`.
+
+### Build-time OCI labels
+
+The script passes three `--build-arg` values that the Dockerfile runtime stage
+turns into per-build `org.opencontainers.image.*` labels:
+
+- `VERSION`: the `Cargo.toml` version -> `org.opencontainers.image.version`.
+- `REVISION`: `git rev-parse --short HEAD` (suffixed `-dirty` when the working
+  tree has uncommitted changes, or `unknown` outside a git checkout) ->
+  `org.opencontainers.image.revision`.
+- `CREATED`: RFC 3339 UTC build time (`date -u +%Y-%m-%dT%H:%M:%SZ`) ->
+  `org.opencontainers.image.created`.
+
+The static labels (title, description, source, licenses, vendor, ...) are baked
+into the Dockerfile and need no build args.
 
 ## Notes
 
