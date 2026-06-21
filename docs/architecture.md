@@ -3,17 +3,26 @@
 Chronos is an HTTP-backend time synchronization gateway. It lets a restricted
 data center that may only egress over HTTPS still discipline its clocks: a
 `chronos-gateway` samples time from a `chronos-server` over HTTP/HTTPS and feeds
-the samples to a local `chronyd` through chrony's SOCK refclock. `chronyd` then
-disciplines the gateway host clock and serves NTP to the internal network.
+the samples to a local NTP daemon through a configurable output backend. The
+daemon then disciplines the gateway host clock and serves NTP to the internal
+network.
+
+The output backend is selected at runtime by the gateway's `output`
+configuration (see [`deployment-gateway.md`](deployment-gateway.md)):
+
+- `chrony_sock` — chrony's SOCK refclock (`chronos-chrony`). Requires root to
+  write chronyd's root-owned socket.
+- `ntp_shm` — ntpd/ntpsec's SHM refclock (`chronos-ntp`). Runs without root when
+  the segment is world-writable.
 
 ```text
 chronos-server (HTTP Time API)
         | HTTP / HTTPS
         v
 chronos-gateway (sample, filter, estimate offset)
-        | Unix datagram socket (chrony SOCK refclock)
+        | OutputBackend: chrony SOCK refclock | ntpd/ntpsec SHM refclock
         v
-chronyd (disciplines local clock, serves NTP)
+chronyd / ntpd / ntpsec (disciplines local clock, serves NTP)
         | UDP/123 inside the DC
         v
 internal servers (chrony / timesyncd / ntpsec)
@@ -30,17 +39,18 @@ time by the Cargo workspace.
 crates/
   chronos-core     # domain: types, ports (traits), pure algorithms — no I/O
   chronos-chrony   # adapter: implements OutputBackend over a Unix datagram socket
+  chronos-ntp      # adapter: implements OutputBackend over the ntpd/ntpsec SHM refclock
   chronos-server   # composition root: axum HTTP/HTTPS API + time-status provider
   chronos-gateway  # composition root: reqwest client, sampler, scheduler, status API
-  chronos-ntp      # reserved placeholder for v2 backends
 ```
 
 Dependency arrows (all inward):
 
 ```text
 chronos-chrony  -> chronos-core
+chronos-ntp     -> chronos-core
 chronos-server  -> chronos-core
-chronos-gateway -> chronos-core, chronos-chrony
+chronos-gateway -> chronos-core, chronos-chrony, chronos-ntp
 ```
 
 ### `chronos-core` (innermost)
@@ -66,6 +76,14 @@ Implements the `OutputBackend` port by encoding a `TimeSample` into chrony's
 `std::os::unix::net::UnixDatagram`. It performs no clock adjustment of its own.
 See [`chrony-integration.md`](chrony-integration.md).
 
+### `chronos-ntp` (adapter/driver)
+
+Implements the `OutputBackend` port by publishing a `TimeSample` into the SysV
+shared-memory segment that ntpd/ntpsec's `SHM(u)` refclock (`127.127.28.u`)
+reads. It creates the segment (when absent) with configurable permissions, so a
+world-writable segment lets the gateway run without root. It performs no clock
+adjustment of its own. See [`ntp-shm-integration.md`](ntp-shm-integration.md).
+
 ### `chronos-server` (composition root)
 
 An `axum` application exposing `/time`, `/healthz`, and `/status`, optionally
@@ -81,15 +99,15 @@ its command protocol (no `chronyc` binary). See
 
 A `tokio` application that builds one `reqwest` client per backend (enforcing the
 transport security policy first), collects burst samples, filters them, selects
-the median offset, and writes the chosen sample to the chrony backend. It exposes
-a local `/healthz` and `/status` endpoint. See
-[`deployment-gateway.md`](deployment-gateway.md).
+the median offset, and writes the chosen sample to the configured output backend.
+The `output` config (a tagged union) selects the backend at the composition
+root; `build_output` is the only place that names a concrete adapter. The
+deprecated `chrony:` section is still accepted as an alias for
+`output: { type: chrony_sock, ... }`. It exposes a local `/healthz` and
+`/status` endpoint. See [`deployment-gateway.md`](deployment-gateway.md).
 
-### `chronos-ntp` (v2 placeholder)
-
-Empty crate reserved for v2 output backends (`builtin_ntp_server`,
-`direct_clock_setter`). v2 adds new `OutputBackend` implementations without
-rewriting the v1 core.
+Future output backends (`builtin_ntp_server`, `direct_clock_setter`) add new
+`OutputBackend` implementations without rewriting the core.
 
 ## Timestamps
 

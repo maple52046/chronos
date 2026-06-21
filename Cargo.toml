@@ -18,3 +18,4 @@ rust-version = "1.90"
 [workspace.dependencies]
 chronos-core = { path = "crates/chronos-core" }
 chronos-chrony = { path = "crates/chronos-chrony" }
+chronos-ntp = { path = "crates/chronos-ntp" }

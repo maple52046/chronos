@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Reserved placeholder for the Chronos v2 NTP output backends."
+description = "ntpd/ntpsec SHM refclock output backend for Chronos."
 
 [dependencies]
+chronos-core.workspace = true
+libc = "0.2.180"

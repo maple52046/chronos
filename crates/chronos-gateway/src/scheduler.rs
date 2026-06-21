@@ -74,7 +74,7 @@ impl Scheduler {
     /// Samples backends in priority order, writing the first usable result to
     /// the output backend.
     ///
-    /// A failed chrony write does not promote the round to a failure: the
+    /// A failed output write does not promote the round to a failure: the
     /// backend sample is still good, so the gateway stays synchronized while the
     /// write error is surfaced on the status endpoint.
     async fn run_round(&self) -> bool {
@@ -100,12 +100,12 @@ impl Scheduler {
                     offset_nanos = sample.estimated_offset_nanos as i64,
                     rtt_nanos = sample.rtt_nanos,
                     good = result.good_samples,
-                    "wrote sample to chrony"
+                    "wrote sample to output backend"
                 ),
                 Err(err) => tracing::error!(
                     backend = client.name(),
                     error = %err,
-                    "failed to write sample to chrony"
+                    "failed to write sample to output backend"
                 ),
             }
             self.status.record_sample(
@@ -255,7 +255,7 @@ mod tests {
             sampler(),
             Duration::from_secs(30),
             output.clone(),
-            SharedStatus::new("/run/chrony/chronos.sock"),
+            SharedStatus::new("chrony_sock", "chrony SOCK /run/chrony/chronos.sock"),
         );
 
         assert!(scheduler.run_round().await);
@@ -281,7 +281,7 @@ mod tests {
             sampler(),
             Duration::from_secs(30),
             output.clone(),
-            SharedStatus::new("/run/chrony/chronos.sock"),
+            SharedStatus::new("chrony_sock", "chrony SOCK /run/chrony/chronos.sock"),
         );
 
         assert!(!scheduler.run_round().await);
@@ -303,7 +303,7 @@ mod tests {
             sampler(),
             Duration::from_secs(30),
             output.clone(),
-            SharedStatus::new("/run/chrony/chronos.sock"),
+            SharedStatus::new("chrony_sock", "chrony SOCK /run/chrony/chronos.sock"),
         );
 
         // A failed chrony write does not invalidate a good backend sample.

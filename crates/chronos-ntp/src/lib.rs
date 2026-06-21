@@ -1,6 +1,16 @@
-//! Reserved placeholder crate for the Chronos v2 NTP output backends.
+//! ntpd/ntpsec SHM refclock output backend for Chronos.
 //!
-//! v1 ships no built-in NTP server and no direct clock setter; this crate exists
-//! so the v2 `builtin_ntp_server` and `direct_clock_setter` backends can be added
-//! without restructuring the workspace.
-#![forbid(unsafe_code)]
+//! This crate implements the [`chronos_core::OutputBackend`] port by writing
+//! samples into the SysV shared-memory segment that ntpd/ntpsec's `SHM(u)`
+//! refclock driver (`127.127.28.u`) reads. It performs no clock adjustment of
+//! its own; the local NTP daemon remains the sole clock disciplinarian.
+//!
+//! When the segment is created with world-writable permissions (the ntpd
+//! convention for unit numbers `>= 2`), the gateway can feed it without running
+//! as root.
+
+pub mod shm_refclock;
+pub mod writer;
+
+pub use shm_refclock::{ShmTime, NTP_SHM_KEY_BASE, SHM_TIME_SIZE};
+pub use writer::ShmRefclockBackend;

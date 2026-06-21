@@ -66,6 +66,15 @@ pub trait OutputBackend {
     /// Returns [`ChronosError::OutputBackend`] when the sample cannot be
     /// delivered (e.g. the chrony socket is unavailable).
     fn submit_sample(&self, sample: &TimeSample) -> Result<(), ChronosError>;
+
+    /// Returns a short, operator-facing description of the output target.
+    ///
+    /// Rationale: the status endpoint reports which sink samples are written to
+    /// without naming a concrete adapter. This is pure introspection; the domain
+    /// owns the contract while outer crates supply the backend-specific text.
+    fn target_description(&self) -> String {
+        "unknown output backend".to_string()
+    }
 }
 
 #[cfg(test)]

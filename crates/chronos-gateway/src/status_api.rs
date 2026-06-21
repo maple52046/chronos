@@ -27,14 +27,18 @@ struct StatusState {
     last_rtt_ms: Option<u64>,
     last_offset_ms: Option<i64>,
     last_quality: Option<SampleQuality>,
-    sock_path: String,
+    output_kind: String,
+    output_target: String,
     last_write: String,
 }
 
 impl SharedStatus {
     /// Creates a status handle in the [`GatewayState::Starting`] state.
+    ///
+    /// `kind` is the output backend discriminant (e.g. `chrony_sock`,
+    /// `ntp_shm`) and `target` is its operator-facing description.
     #[must_use]
-    pub fn new(sock_path: impl Into<String>) -> Self {
+    pub fn new(kind: impl Into<String>, target: impl Into<String>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(StatusState {
                 state: GatewayState::Starting,
@@ -44,7 +48,8 @@ impl SharedStatus {
                 last_rtt_ms: None,
                 last_offset_ms: None,
                 last_quality: None,
-                sock_path: sock_path.into(),
+                output_kind: kind.into(),
+                output_target: target.into(),
                 last_write: "pending".to_string(),
             })),
         }
@@ -57,7 +62,8 @@ impl SharedStatus {
         }
     }
 
-    /// Records a selected sample and the result of writing it to chrony.
+    /// Records a selected sample and the result of writing it to the output
+    /// backend.
     pub fn record_sample(
         &self,
         backend_name: &str,
@@ -104,8 +110,9 @@ struct LastSample {
 }
 
 #[derive(Debug, Serialize)]
-struct ChronyInfo {
-    sock_path: String,
+struct OutputInfo {
+    kind: String,
+    target: String,
     last_write: String,
 }
 
@@ -115,7 +122,7 @@ struct StatusResponse {
     state: GatewayState,
     backend: Option<BackendInfo>,
     last_sample: LastSample,
-    chrony: ChronyInfo,
+    output: OutputInfo,
 }
 
 async fn healthz() -> Json<serde_json::Value> {
@@ -141,8 +148,9 @@ async fn status_handler(State(status): State<SharedStatus>) -> Json<StatusRespon
             estimated_offset_ms: snapshot.last_offset_ms,
             quality: snapshot.last_quality,
         },
-        chrony: ChronyInfo {
-            sock_path: snapshot.sock_path,
+        output: OutputInfo {
+            kind: snapshot.output_kind,
+            target: snapshot.output_target,
             last_write: snapshot.last_write,
         },
     })
@@ -178,7 +186,11 @@ mod tests {
 
     #[tokio::test]
     async fn healthz_returns_ok() {
-        let addr = spawn(SharedStatus::new("/run/chrony/chronos.sock")).await;
+        let addr = spawn(SharedStatus::new(
+            "chrony_sock",
+            "chrony SOCK /run/chrony/chronos.sock",
+        ))
+        .await;
         let body: serde_json::Value = reqwest::get(format!("http://{addr}/healthz"))
             .await
             .expect("request")
@@ -190,7 +202,7 @@ mod tests {
 
     #[tokio::test]
     async fn status_reflects_recorded_sample() {
-        let status = SharedStatus::new("/run/chrony/chronos.sock");
+        let status = SharedStatus::new("ntp_shm", "ntp shm unit 2 (127.127.28.2)");
         status.update_state(GatewayState::Synchronized);
         status.record_sample(
             "primary",
@@ -211,6 +223,8 @@ mod tests {
         assert_eq!(body["last_sample"]["rtt_ms"], 42);
         assert_eq!(body["last_sample"]["estimated_offset_ms"], 3);
         assert_eq!(body["last_sample"]["quality"], "Good");
-        assert_eq!(body["chrony"]["last_write"], "ok");
+        assert_eq!(body["output"]["kind"], "ntp_shm");
+        assert_eq!(body["output"]["target"], "ntp shm unit 2 (127.127.28.2)");
+        assert_eq!(body["output"]["last_write"], "ok");
     }
 }

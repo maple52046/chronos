@@ -8,24 +8,36 @@ backends:
     require_valid_cert: true
 
 sampling:
-  # Size this against chrony's refclock poll so chronyd gets at least two samples
-  # per poll: 2^poll >= 2 * interval_seconds. This pairs with `poll 4` (16 s) in
-  # chrony.gateway.conf. If they are too close (e.g. a 30 s interval with `poll 5`
-  # = 32 s), jitter leaves many polls empty and chronyd is slow to select the
-  # source and step a large initial offset. For lower steady-state load use
-  # interval_seconds: 30 with `poll 6` (64 s).
+  # Size this against the daemon's refclock poll so it gets at least two samples
+  # per poll. For ntpd/ntpsec SHM the default minpoll is 16 s, so an 8 s interval
+  # gives two samples per poll. For chrony see chrony.gateway.conf.
   interval_seconds: 8
   burst_samples: 5
   min_good_samples: 3
   max_rtt_ms: 300
   outlier_threshold_ms: 100
 
-chrony:
-  # chronyd creates this socket in its own runtime directory (/run/chrony) as
-  # root; the gateway must be able to write to it (run the gateway as root). The
-  # path and refid must match chrony.gateway.conf.
-  sock_path: "/run/chrony/chronos.sock"
-  refid: "CHRO"
+# Output backend selector. Exactly one backend is chosen by `type`.
+#
+# Default: ntpd/ntpsec SHM refclock. The gateway creates the SHM segment with
+# `perm` (0666 lets it run as a NON-root user that ntpd/ntpsec also reads).
+# Configure the daemon with the matching SHM unit, e.g.:
+#   ntpsec: refclock shm unit 2 refid SHM
+#   ntpd:   server 127.127.28.2  (and fudge as needed)
+output:
+  type: ntp_shm
+  unit: 2
+  perm: "0666"
+  precision: -1
+
+# Alternative: chrony SOCK refclock. chronyd creates the socket as root, so the
+# gateway must run as root to write it (see deployment-gateway.md). To use it,
+# remove the `output:` block above and uncomment this one (the path and refid
+# must match chrony.gateway.conf):
+# output:
+#   type: chrony_sock
+#   sock_path: "/run/chrony/chronos.sock"
+#   refid: "CHRO"
 
 security:
   allow_plain_http_backends: false

@@ -285,6 +285,7 @@ dependencies = [
  "base64",
  "chronos-chrony",
  "chronos-core",
+ "chronos-ntp",
  "clap",
  "reqwest",
  "rustls",
@@ -303,6 +304,10 @@ dependencies = [
 [[package]]
 name = "chronos-ntp"
 version = "1.0.0"
+dependencies = [
+ "chronos-core",
+ "libc",
+]
 
 [[package]]
 name = "chronos-server"

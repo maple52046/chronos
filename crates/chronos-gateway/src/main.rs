@@ -18,13 +18,14 @@ use anyhow::Context;
 use chronos_chrony::ChronySockRefclockBackend;
 use chronos_core::config::{LogFormat, LoggingConfig};
 use chronos_core::OutputBackend;
+use chronos_ntp::ShmRefclockBackend;
 use clap::Parser;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 use crate::backend_client::BackendClient;
-use crate::config::GatewayConfig;
+use crate::config::{GatewayConfig, OutputConfig};
 use crate::filter::RoundFilter;
 use crate::sampler::Sampler;
 use crate::scheduler::Scheduler;
@@ -72,9 +73,18 @@ async fn main() -> anyhow::Result<()> {
     }
 
     init_tracing(&config.logging)?;
+
+    let output_config = config.resolve_output()?;
+    if config.uses_deprecated_chrony_alias() {
+        tracing::warn!(
+            "`chrony:` config section is deprecated and will be removed; use `output: {{ type: chrony_sock, ... }}`"
+        );
+    }
+    let output = build_output(&output_config)?;
+    let output_target = output.target_description();
     tracing::info!(
         backends = config.backends.len(),
-        sock_path = %config.chrony.sock_path.display(),
+        output = %output_target,
         "chronos-gateway starting"
     );
 
@@ -105,16 +115,36 @@ async fn main() -> anyhow::Result<()> {
     );
     let interval = Duration::from_secs(config.sampling.interval_seconds);
 
-    let output: Arc<dyn OutputBackend + Send + Sync> = Arc::new(ChronySockRefclockBackend::new(
-        config.chrony.sock_path.clone(),
-    ));
-    let status = SharedStatus::new(config.chrony.sock_path.display().to_string());
+    let status = SharedStatus::new(output_kind(&output_config), output_target);
 
     serve_status(&config.status.listen, status.clone()).await?;
 
     Scheduler::new(clients, sampler, interval, output, status)
         .run()
         .await
+}
+
+/// Builds the configured output backend, selecting the implementation by the
+/// `output` discriminant (the composition root's only place that names a
+/// concrete adapter).
+fn build_output(output: &OutputConfig) -> anyhow::Result<Arc<dyn OutputBackend + Send + Sync>> {
+    match output {
+        OutputConfig::ChronySock(chrony) => Ok(Arc::new(ChronySockRefclockBackend::new(
+            chrony.sock_path.clone(),
+        ))),
+        OutputConfig::NtpShm(shm) => {
+            let backend = ShmRefclockBackend::new(shm.unit, shm.perm_bits()?, shm.precision)?;
+            Ok(Arc::new(backend))
+        }
+    }
+}
+
+/// Returns the stable status discriminant string for an output backend.
+fn output_kind(output: &OutputConfig) -> &'static str {
+    match output {
+        OutputConfig::ChronySock(_) => "chrony_sock",
+        OutputConfig::NtpShm(_) => "ntp_shm",
+    }
 }
 
 /// Probes the local status endpoint, returning an error when not healthy.

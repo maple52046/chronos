@@ -1,0 +1,39 @@
+backends:
+  - name: "primary"
+    # Base URL of the Chronos server; the gateway appends "/time". Include the
+    # server's api.base_path here when set, e.g.
+    # "https://time.example.com/chronos".
+    base_url: "https://time.example.com"
+    require_tls: true
+    require_valid_cert: true
+
+sampling:
+  # Size this against chrony's refclock poll so chronyd gets at least two samples
+  # per poll: 2^poll >= 2 * interval_seconds. This pairs with `poll 4` (16 s) in
+  # chrony.gateway.conf. For lower steady-state load use interval_seconds: 30
+  # with `poll 6` (64 s).
+  interval_seconds: 8
+  burst_samples: 5
+  min_good_samples: 3
+  max_rtt_ms: 300
+  outlier_threshold_ms: 100
+
+# chrony SOCK refclock backend. chronyd creates this socket in its own runtime
+# directory (/run/chrony) as root, so the gateway must run as root to write it.
+# The path and refid must match chrony.gateway.conf.
+output:
+  type: chrony_sock
+  sock_path: "/run/chrony/chronos.sock"
+  refid: "CHRO"
+
+security:
+  allow_plain_http_backends: false
+  allow_plain_http_loopback: true
+  pinned_spki: []
+
+status:
+  listen: "127.0.0.1:9090"
+
+logging:
+  level: "info"
+  format: "json"

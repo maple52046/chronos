@@ -1,13 +1,68 @@
-# Deploying chronos-gateway (with chronyd)
+# Deploying chronos-gateway
 
-`chronos-gateway` runs on a host alongside `chronyd`. It samples a
-`chronos-server` over HTTP/HTTPS and writes good samples to chrony's SOCK
-refclock. `chronyd` is the sole clock disciplinarian: it steps/slews the host
-clock and can serve NTP to the rest of the network. The gateway never touches
-the system clock and needs no `CAP_SYS_TIME`.
+`chronos-gateway` runs on a host alongside a local NTP daemon. It samples a
+`chronos-server` over HTTP/HTTPS and writes good samples to the daemon through a
+configurable output backend. The daemon is the sole clock disciplinarian: it
+steps/slews the host clock and can serve NTP to the rest of the network. The
+gateway never touches the system clock and needs no `CAP_SYS_TIME`.
 
 This is the right design when a host cannot reach public NTP (UDP/123 egress is
 firewalled) but can reach the Chronos server over HTTPS.
+
+## Choosing an output backend
+
+The gateway's `output` config selects where samples are written. Pick the
+backend that matches the NTP daemon already on the host.
+
+| Backend | Daemon | Gateway runs as | Why |
+| --- | --- | --- | --- |
+| `ntp_shm` | ntpd / ntpsec | non-root | the SHM segment can be group/world-writable |
+| `chrony_sock` | chrony | root* | chronyd owns the SOCK socket with fixed permissions |
+
+\* If chrony later offers a configurable socket mode/group, `chrony_sock` could
+also drop root.
+
+The default shipped config ([`examples/config/gateway.yaml`](../examples/config/gateway.yaml))
+uses `ntp_shm` and runs non-root. For chrony use
+[`examples/config/gateway.chrony.yaml`](../examples/config/gateway.chrony.yaml)
+and the root variants of the unit/compose files. The deprecated `chrony:`
+section is still accepted as an alias for `output: { type: chrony_sock, ... }`
+and logs a warning; migrate to `output:` before it is removed.
+
+`systemd-timesyncd` is **not** an output target: it is an SNTP client with no
+SOCK/SHM refclock input. A timesyncd host should instead be a downstream NTP
+client of the gateway host (see "Internal client setup" below).
+
+## ntp_shm quickstart (ntpd/ntpsec, non-root)
+
+1. Configure the daemon with a matching SHM refclock unit (default `unit: 2`):
+
+   ```conf
+   # ntpsec (/etc/ntpsec/ntp.conf)
+   refclock shm unit 2 refid SHM
+   ```
+
+   ```conf
+   # classic ntpd (/etc/ntp.conf)
+   server 127.127.28.2 mode 1 prefer
+   fudge 127.127.28.2 refid SHM
+   ```
+
+   Restart the daemon, then run the gateway (container or systemd) with the
+   default `ntp_shm` config. The gateway creates the segment world-writable
+   (`output.perm: "0666"`) so it needs no root. See
+   [`ntp-shm-integration.md`](ntp-shm-integration.md).
+
+2. Verify:
+
+   ```bash
+   curl -fsS http://127.0.0.1:9090/status    # output.kind ntp_shm, last_write "ok"
+   ntpq -p                                    # expect a SHM(2) line that becomes reachable
+   ```
+
+## chrony_sock setup (chrony, root)
+
+The remaining sections describe the `chrony_sock` backend.
 
 ## 1. Configure chronyd (SOCK refclock)
 
@@ -59,13 +114,13 @@ ls -l /run/chrony/chronos.sock     # expect a srwxr-xr-x socket
 
 Use the published image with host networking, running as root so it can write
 the chrony socket. See
-[`examples/compose/docker-compose.gateway.yml`](../examples/compose/docker-compose.gateway.yml)
-and [`examples/config/gateway.yaml`](../examples/config/gateway.yaml).
+[`examples/compose/docker-compose.gateway.chrony.yml`](../examples/compose/docker-compose.gateway.chrony.yml)
+and [`examples/config/gateway.chrony.yaml`](../examples/config/gateway.chrony.yaml).
 
 ```bash
 mkdir -p ~/chronos-gateway && cd ~/chronos-gateway
-cp /path/to/examples/compose/docker-compose.gateway.yml docker-compose.yml
-cp /path/to/examples/config/gateway.yaml gateway.yaml
+cp /path/to/examples/compose/docker-compose.gateway.chrony.yml docker-compose.yml
+cp /path/to/examples/config/gateway.chrony.yaml gateway.yaml
 # Edit gateway.yaml: set backends[].base_url to your Chronos server.
 docker compose up -d
 ```
@@ -77,8 +132,8 @@ binary's `healthcheck` subcommand, which probes the local `status.listen`
 ## 3. Verify (and first-sync behavior)
 
 ```bash
-docker compose logs -f chronos-gateway      # expect "wrote sample to chrony", state Synchronized
-curl -fsS http://127.0.0.1:9090/status      # chrony.last_write should be "ok"
+docker compose logs -f chronos-gateway      # expect "wrote sample to output backend", state Synchronized
+curl -fsS http://127.0.0.1:9090/status      # output.last_write should be "ok"
 chronyc sources                             # expect a refid CHRO line
 chronyc tracking                            # Reference ID becomes CHRO, Leap status Normal
 ```
@@ -95,8 +150,11 @@ minutes. If it stays `#?` for longer, see
 See [`examples/config/gateway.yaml`](../examples/config/gateway.yaml). Key
 sections: `backends` (ordered; earlier entries preferred), `sampling`
 (`interval_seconds`, `burst_samples`, `min_good_samples`, `max_rtt_ms`,
-`outlier_threshold_ms`), `chrony` (`sock_path`, `refid`), `security`, and
-`status` (`listen`). See [`security.md`](security.md) for the transport policy.
+`outlier_threshold_ms`), `output` (the backend selector — `type: ntp_shm` with
+`unit`/`perm`/`precision`, or `type: chrony_sock` with `sock_path`/`refid`),
+`security`, and `status` (`listen`). The deprecated `chrony:` section is still
+accepted as an alias for `output: { type: chrony_sock, ... }`. See
+[`security.md`](security.md) for the transport policy.
 
 - Each backend's `base_url` is the Chronos server's base URL **without** the
   endpoint; the gateway appends `/time`. Include the server's `api.base_path`
@@ -110,6 +168,27 @@ sections: `backends` (ordered; earlier entries preferred), `sampling`
 
 ## Alternative: systemd service (no container)
 
+For the chrony_sock backend, install the binary, a `chrony_sock` config, and the
+root variant unit:
+
+```bash
+sudo install -m 0755 target/release/chronos-gateway /usr/local/bin/chronos-gateway
+sudo install -D -m 0644 examples/config/gateway.chrony.yaml /etc/chronos/gateway.yaml
+sudo install -m 0644 packaging/systemd/chronos-gateway-chrony.service \
+    /etc/systemd/system/chronos-gateway-chrony.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now chronos-gateway-chrony
+```
+
+That unit runs as **root** (`ReadWritePaths=/run/chrony`, `NoNewPrivileges`,
+`ProtectSystem=strict`, `ProtectHome`) because it must write chrony's
+root-owned SOCK socket, and is ordered `After=chronyd.service` so the socket
+exists at start.
+
+For the ntp_shm backend, use the default config and the non-root unit
+[`packaging/systemd/chronos-gateway.service`](../packaging/systemd/chronos-gateway.service)
+(`DynamicUser=yes`), which needs no root:
+
 ```bash
 sudo install -m 0755 target/release/chronos-gateway /usr/local/bin/chronos-gateway
 sudo install -D -m 0644 examples/config/gateway.yaml /etc/chronos/gateway.yaml
@@ -118,11 +197,6 @@ sudo install -m 0644 packaging/systemd/chronos-gateway.service \
 sudo systemctl daemon-reload
 sudo systemctl enable --now chronos-gateway
 ```
-
-The unit runs as **root** (`ReadWritePaths=/run/chrony`, `NoNewPrivileges`,
-`ProtectSystem=strict`, `ProtectHome`) because it must write chrony's
-root-owned SOCK socket, and is ordered `After=chronyd.service` so the socket
-exists at start.
 
 ## Internal client setup
 

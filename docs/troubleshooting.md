@@ -5,9 +5,9 @@
 - Confirm `chronyd` created the socket: `ls -l /run/chrony/chronos.sock`.
 - Confirm chrony config has `refclock SOCK /run/chrony/chronos.sock refid CHRO`
   (e.g. in `/etc/chrony/conf.d/chronos.conf`) and that `refid` matches the
-  gateway's `chrony.refid`.
+  gateway's `output.refid` (chrony_sock backend).
 - Confirm the gateway is writing: `curl -s 127.0.0.1:9090/status` should show
-  `chrony.last_write: "ok"`. If it shows an error, the socket path or
+  `output.last_write: "ok"`. If it shows an error, the socket path or
   permissions are wrong.
 - Start order matters: restart `chronyd` (so the socket exists) before starting
   the gateway. The systemd unit is ordered `After=chronyd.service`.

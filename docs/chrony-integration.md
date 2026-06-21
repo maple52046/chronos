@@ -1,8 +1,13 @@
 # chrony Integration
 
-`chronos-gateway` never adjusts the system clock. It writes time samples to
-chrony's SOCK refclock; `chronyd` is the sole clock disciplinarian and the NTP
-server for the internal network.
+This page covers the `chrony_sock` output backend. The gateway can also feed
+ntpd/ntpsec without root via the `ntp_shm` backend; see
+[`ntp-shm-integration.md`](ntp-shm-integration.md) and the privilege matrix in
+[`deployment-gateway.md`](deployment-gateway.md).
+
+`chronos-gateway` never adjusts the system clock. With this backend it writes
+time samples to chrony's SOCK refclock; `chronyd` is the sole clock
+disciplinarian and the NTP server for the internal network.
 
 ## SOCK refclock wire format
 
@@ -59,12 +64,17 @@ stepped by `makestep` (present in the Debian/Ubuntu default `chrony.conf`).
 `chronyd` creates the socket inside its own runtime directory
 (`/run/chrony/chronos.sock` on Debian/Ubuntu). It creates the socket while
 running as **root**, so the socket is owned by root (`srwxr-xr-x`). chrony has no
-option to relax the SOCK permissions, so **`chronos-gateway` must run as root**
-to write samples to it:
+option to relax the SOCK permissions, so the gateway must run as root **when
+using the `chrony_sock` backend** to write samples to it. This root requirement
+is specific to this backend, not to the gateway in general; the `ntp_shm`
+backend needs no root (see the privilege matrix in
+[`deployment-gateway.md`](deployment-gateway.md)).
 
 - Container: `user: "0:0"` and bind-mount `/run/chrony` (see
-  [`examples/compose/docker-compose.gateway.yml`](../examples/compose/docker-compose.gateway.yml)).
-- systemd: the shipped unit runs as root with `ReadWritePaths=/run/chrony`.
+  [`examples/compose/docker-compose.gateway.chrony.yml`](../examples/compose/docker-compose.gateway.chrony.yml)).
+- systemd: use the root variant
+  [`chronos-gateway-chrony.service`](../packaging/systemd/chronos-gateway-chrony.service),
+  which runs as root with `ReadWritePaths=/run/chrony`.
 
 Confirm who owns the socket and dir if writes fail:
 

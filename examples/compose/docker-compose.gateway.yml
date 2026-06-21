@@ -5,13 +5,14 @@ services:
     restart: unless-stopped
     command: ["chronos-gateway", "--config", "/etc/chronos/gateway.yaml"]
     network_mode: host
-    # Run as root: chronyd creates the SOCK refclock socket owned by root, so the
-    # gateway must be root to write samples to it.
-    user: "0:0"
+    # Share the host SysV IPC namespace so the gateway and the host's
+    # ntpd/ntpsec see the same SHM refclock segment (127.127.28.<unit>).
+    ipc: host
+    # Non-root by default: the ntp_shm backend writes a world-writable SHM
+    # segment (gateway.yaml output.perm: "0666"), so no root is required.
+    user: "65532:65532"
     volumes:
       - ./gateway.yaml:/etc/chronos/gateway.yaml:ro
-      # chrony's own runtime dir, where chronyd creates /run/chrony/chronos.sock.
-      - /run/chrony:/run/chrony
     read_only: true
     tmpfs:
       - /tmp
@@ -25,10 +26,9 @@ services:
       retries: 3
 
 # Notes:
-#   1. chronyd must run on the host, configured with the SOCK refclock from
-#      examples/config/chrony.gateway.conf (refid/socket path must match
-#      gateway.yaml). Restart chronyd before starting this container so the
-#      socket exists.
-#   2. chronos-gateway writes to the host chrony socket at /run/chrony.
-#   3. the container does not need CAP_SYS_TIME and never sets the clock itself;
-#      chronyd is the sole clock disciplinarian.
+#   1. ntpd/ntpsec must run on the host with a matching SHM refclock unit
+#      (gateway.yaml output.unit), e.g. ntpsec: "refclock shm unit 2 refid SHM".
+#   2. The gateway creates/attaches the SHM segment; ipc: host makes it visible
+#      to the host daemon. The container needs no root and no CAP_SYS_TIME.
+#   3. For the chrony_sock backend (root-required) use
+#      docker-compose.gateway.chrony.yml instead.
