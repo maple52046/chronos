@@ -14,8 +14,12 @@ api:
   base_path: ""
 
 time_status:
-  provider: "chrony"
-  chronyc_path: "/usr/bin/chronyc"
+  # "system" (default) reads the kernel NTP state via adjtimex and works with
+  # any disciplining daemon (chrony, ntpd, systemd-timesyncd). "chrony" queries
+  # chronyd directly over its command protocol (no chronyc binary needed).
+  provider: "system"
+  # Address of chronyd's command socket; only used by the "chrony" provider.
+  chrony_address: "127.0.0.1:323"
   allow_unknown_status: false
 
 logging:

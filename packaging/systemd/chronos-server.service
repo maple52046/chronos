@@ -15,7 +15,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/run/chronos
 
 [Install]
 WantedBy=multi-user.target

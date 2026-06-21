@@ -30,7 +30,7 @@ time by the Cargo workspace.
 crates/
   chronos-core     # domain: types, ports (traits), pure algorithms — no I/O
   chronos-chrony   # adapter: implements OutputBackend over a Unix datagram socket
-  chronos-server   # composition root: axum HTTP/HTTPS API + chronyc status provider
+  chronos-server   # composition root: axum HTTP/HTTPS API + time-status provider
   chronos-gateway  # composition root: reqwest client, sampler, scheduler, status API
   chronos-ntp      # reserved placeholder for v2 backends
 ```
@@ -72,8 +72,10 @@ An `axum` application exposing `/time`, `/healthz`, and `/status`, optionally
 mounted under a configurable `api.base_path` prefix (e.g. `/chronos`) for sharing
 a reverse proxy. It supports three transport modes (native HTTP, native HTTPS via
 `axum-server` + `rustls`, and HTTP behind a reverse proxy). Synchronization
-status comes from a `TimeStatusProvider` — the v1 implementation shells out to
-`chronyc tracking`. See [`deployment-server.md`](deployment-server.md).
+status comes from a `TimeStatusProvider`: the default `system` provider reads the
+kernel NTP state via `adjtimex`, and the `chrony` provider queries `chronyd` over
+its command protocol (no `chronyc` binary). See
+[`deployment-server.md`](deployment-server.md).
 
 ### `chronos-gateway` (composition root)
 

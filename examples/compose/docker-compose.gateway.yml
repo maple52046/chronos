@@ -1,27 +1,34 @@
 services:
   chronos-gateway:
-    image: ghcr.io/maple52046/chronos:v1-20260619143005
+    image: ghcr.io/maple52046/chronos:1.0.0-20260620153221
     container_name: chronos-gateway
     restart: unless-stopped
     command: ["chronos-gateway", "--config", "/etc/chronos/gateway.yaml"]
     network_mode: host
+    # Run as root: chronyd creates the SOCK refclock socket owned by root, so the
+    # gateway must be root to write samples to it.
+    user: "0:0"
     volumes:
       - ./gateway.yaml:/etc/chronos/gateway.yaml:ro
-      - /run/chronos:/run/chronos
+      # chrony's own runtime dir, where chronyd creates /run/chrony/chronos.sock.
+      - /run/chrony:/run/chrony
     read_only: true
     tmpfs:
       - /tmp
+    # The image ships no curl; the binary's healthcheck subcommand probes the
+    # local status endpoint (status.listen) /healthz.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9090/healthz"]
+      test: ["CMD", "chronos-gateway", "healthcheck", "--config", "/etc/chronos/gateway.yaml"]
       interval: 30s
       timeout: 3s
       start_period: 10s
       retries: 3
 
 # Notes:
-#   1. chronyd should run on the host.
-#   2. chronos-gateway writes to the host chrony socket at /run/chronos.
-#   3. the container does not need CAP_SYS_TIME.
-#   4. the container never adjusts the system clock directly.
-# If socket permissions are difficult, run chronos-gateway as a host systemd
-# service instead of a container.
+#   1. chronyd must run on the host, configured with the SOCK refclock from
+#      examples/config/chrony.gateway.conf (refid/socket path must match
+#      gateway.yaml). Restart chronyd before starting this container so the
+#      socket exists.
+#   2. chronos-gateway writes to the host chrony socket at /run/chrony.
+#   3. the container does not need CAP_SYS_TIME and never sets the clock itself;
+#      chronyd is the sole clock disciplinarian.

@@ -9,6 +9,7 @@ mod tls;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use chronos_core::config::{LogFormat, LoggingConfig};
@@ -20,7 +21,9 @@ use tracing_subscriber::EnvFilter;
 
 use crate::api::{router, AppState};
 use crate::config::ServerConfig;
-use crate::status_provider::{ChronycStatusProvider, UnknownStatusProvider};
+use crate::status_provider::{
+    ChronyStatusProvider, SystemClockStatusProvider, UnknownStatusProvider,
+};
 
 /// Command-line arguments for `chronos-server`.
 #[derive(Debug, Parser)]
@@ -31,15 +34,38 @@ use crate::status_provider::{ChronycStatusProvider, UnknownStatusProvider};
 )]
 struct Cli {
     /// Path to the YAML configuration file.
-    #[arg(long, value_name = "FILE", default_value = "/etc/chronos/server.yaml")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        global = true,
+        default_value = "/etc/chronos/server.yaml"
+    )]
     config: PathBuf,
+    /// Optional subcommand; absent runs the server.
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+/// `chronos-server` subcommands.
+#[derive(Debug, clap::Subcommand)]
+enum Command {
+    /// Probe the local health endpoint and exit non-zero if unhealthy.
+    ///
+    /// Intended as a container `HEALTHCHECK`, replacing a `curl` dependency.
+    Healthcheck,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    ensure_crypto_provider();
     let cli = Cli::parse();
     let config = ServerConfig::load(&cli.config)
         .with_context(|| format!("loading configuration from {}", cli.config.display()))?;
+
+    if matches!(cli.command, Some(Command::Healthcheck)) {
+        return run_healthcheck(&config);
+    }
+
     init_tracing(&config.logging)?;
 
     let provider = build_provider(&config);
@@ -86,8 +112,9 @@ async fn main() -> anyhow::Result<()> {
 /// Selects a time-status provider based on configuration.
 fn build_provider(config: &ServerConfig) -> Arc<dyn TimeStatusProvider + Send + Sync> {
     match config.time_status.provider.as_str() {
-        "chrony" => Arc::new(ChronycStatusProvider::new(
-            config.time_status.chronyc_path.clone(),
+        "system" => Arc::new(SystemClockStatusProvider),
+        "chrony" => Arc::new(ChronyStatusProvider::new(
+            config.time_status.chrony_address.clone(),
         )),
         other => {
             tracing::warn!(
@@ -97,6 +124,66 @@ fn build_provider(config: &ServerConfig) -> Arc<dyn TimeStatusProvider + Send + 
             Arc::new(UnknownStatusProvider)
         }
     }
+}
+
+/// Probes the local health endpoint, returning an error when not healthy.
+///
+/// Operational context: this backs the container `HEALTHCHECK` without a `curl`
+/// dependency. It issues a plain-HTTP request to the loopback listener, so it
+/// assumes the reverse-proxy deployment where the server speaks HTTP locally.
+fn run_healthcheck(config: &ServerConfig) -> anyhow::Result<()> {
+    let addr: SocketAddr = config
+        .server
+        .listen
+        .parse()
+        .with_context(|| format!("parsing listen address {}", config.server.listen))?;
+    let path = format!("{}/healthz", config.api.base_path);
+    probe_healthz(addr.port(), &path)
+}
+
+/// Issues a minimal HTTP/1.0 GET to `http://127.0.0.1:<port><path>`.
+///
+/// Returns an error unless the response status is `200`.
+fn probe_healthz(port: u16, path: &str) -> anyhow::Result<()> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let addr = format!("127.0.0.1:{port}");
+    let mut stream = TcpStream::connect(&addr).with_context(|| format!("connecting to {addr}"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(3)))?;
+
+    let request = format!("GET {path} HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .context("sending health request")?;
+
+    let mut buf = Vec::new();
+    stream
+        .read_to_end(&mut buf)
+        .context("reading health response")?;
+    let head = String::from_utf8_lossy(&buf);
+    let status_line = head.lines().next().unwrap_or_default();
+    if status_line.split_whitespace().nth(1) == Some("200") {
+        Ok(())
+    } else {
+        anyhow::bail!("health endpoint not healthy: {status_line:?}")
+    }
+}
+
+/// Installs the ring `CryptoProvider` as the process default for rustls, once.
+///
+/// Rationale: the workspace pins rustls to the ring backend and uses the
+/// provider-less builders (via `axum-server`'s `tls-rustls-no-provider`), which
+/// require a process-level default provider to be installed first. Guarded by
+/// `Once` so it is safe to call from both the entry point and tests.
+pub(crate) fn ensure_crypto_provider() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        // An error means a provider is already installed, which is fine.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
 }
 
 /// Initializes the global tracing subscriber from logging configuration.

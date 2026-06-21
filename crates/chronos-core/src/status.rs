@@ -8,9 +8,9 @@ use crate::error::ChronosError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimeProvider {
-    /// The bare system clock, with no disciplining daemon consulted.
+    /// The kernel clock-discipline state, read via `adjtimex`.
     SystemClock,
-    /// `chronyd`, queried via `chronyc`.
+    /// `chronyd`, queried over its command protocol.
     Chrony,
     /// The provider could not be determined.
     Unknown,
@@ -114,8 +114,8 @@ pub enum GatewayState {
 
 /// A port that reports the local time-synchronization status of a host.
 ///
-/// Implemented by outer crates (e.g. a `chronyc`-backed provider in
-/// `chronos-server`); the domain depends only on this trait.
+/// Implemented by outer crates (e.g. the `adjtimex`- and chrony-protocol-backed
+/// providers in `chronos-server`); the domain depends only on this trait.
 pub trait TimeStatusProvider {
     /// Returns which subsystem this provider represents.
     fn provider(&self) -> TimeProvider;

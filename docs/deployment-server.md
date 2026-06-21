@@ -17,8 +17,8 @@ api:
   cache_control: "no-store"
   base_path: ""        # e.g. "/chronos" to mount under a shared reverse proxy
 time_status:
-  provider: "chrony"
-  chronyc_path: "/usr/bin/chronyc"
+  provider: "system"            # see "Time-status providers" below
+  chrony_address: "127.0.0.1:323"
   allow_unknown_status: false
 logging:
   level: "info"
@@ -29,6 +29,23 @@ logging:
 chronos-server --config /etc/chronos/server.yaml
 curl -fsS http://127.0.0.1:8080/time
 ```
+
+## Time-status providers
+
+`chronos-server` reports whether its host clock is synchronized so the gateway
+only trusts good time. The provider is selected by `time_status.provider`:
+
+- `system` (default): reads the kernel NTP synchronization state via
+  `adjtimex(2)`. It is daemon-agnostic - any implementation that disciplines the
+  kernel clock (chrony, ntpd, ntpsec, systemd-timesyncd) is reflected, with no
+  external binary. It reports only the sync state (no stratum/offset detail).
+  Note: a daemon that does not maintain the kernel sync flag (e.g. OpenNTPD) is
+  not detected by this provider.
+- `chrony`: queries `chronyd` directly over its command protocol at
+  `time_status.chrony_address` (default `127.0.0.1:323`); no `chronyc` binary is
+  required. Use it when you want chrony's stratum/offset detail. In a container,
+  use host networking so the query reaches the host `chronyd`.
+- any other value: inert; the server serves time but reports `unknown`.
 
 See [`examples/config/server.http.yaml`](../examples/config/server.http.yaml).
 
@@ -90,8 +107,15 @@ The unit runs as the unprivileged `chronos` user with `NoNewPrivileges`,
 ## Docker
 
 The combined image runs the server via `command`. See
-[`examples/compose/docker-compose.server.yml`](../examples/compose/docker-compose.server.yml)
-and [`deployment-gateway.md`](deployment-gateway.md) for build instructions.
+[`examples/compose/docker-compose.server.yml`](../examples/compose/docker-compose.server.yml).
+The image is distroless; the container `HEALTHCHECK` uses the binary's
+`healthcheck` subcommand (no curl). To build the image yourself, follow the
+instructions in the repository [`Dockerfile`](../Dockerfile).
+
+With the default `system` provider, bridge networking with a published port is
+enough. With `time_status.provider: "chrony"`, the container must use
+`network_mode: host` so it can reach the host `chronyd` at `127.0.0.1:323` (the
+example compose documents both).
 
 ## Logging
 

@@ -29,8 +29,9 @@ cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 Binaries are produced at `target/release/chronos-server` and
-`target/release/chronos-gateway`. Building the rustls (aws-lc-rs) TLS provider
-requires `cmake` and a C/C++ toolchain.
+`target/release/chronos-gateway`. TLS uses rustls with the `ring` backend, which
+needs a C compiler to build (but not `cmake`). The container image is built as a
+fully static musl binary and shipped on `distroless/static`.
 
 ## Run
 
@@ -48,7 +49,13 @@ Example configurations live under [`examples/config`](examples/config).
 chronos-server --config examples/config/server.http.yaml
 
 # 2. Gateway sampling that server and writing to the host chrony socket.
-chronos-gateway --config examples/config/gateway.yaml
+#    Prereq: configure chronyd's SOCK refclock. The helper derives the right
+#    `poll` from gateway.yaml and installs the drop-in for you:
+#        sudo packaging/setup-chrony-refclock.sh \
+#            --config examples/config/gateway.yaml --install
+#    Run the gateway as root (it writes chrony's root-owned socket).
+#    Details: docs/deployment-gateway.md.
+sudo chronos-gateway --config examples/config/gateway.yaml
 
 # 3. Inspect.
 curl -fsS http://127.0.0.1:8080/time | jq
@@ -59,12 +66,13 @@ curl -fsS http://127.0.0.1:9090/status | jq
 
 A single combined image contains both binaries; consumers pick the binary via
 `command`. There is no fixed `ENTRYPOINT` and no baked-in `HEALTHCHECK`
-(healthchecks are per service in Compose).
+(healthchecks are per service in Compose, using each binary's `healthcheck`
+subcommand rather than `curl`, which the distroless image does not ship).
 
 ```bash
 TS=$(date -u +%Y%m%d%H%M%S)
-docker build -t "ghcr.io/maple52046/chronos:v1-${TS}" .
-docker push "ghcr.io/maple52046/chronos:v1-${TS}"
+docker build -t "ghcr.io/maple52046/chronos:1.0.0-${TS}" .
+docker push "ghcr.io/maple52046/chronos:1.0.0-${TS}"
 ```
 
 See [`examples/compose`](examples/compose).

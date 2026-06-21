@@ -8,14 +8,23 @@ backends:
     require_valid_cert: true
 
 sampling:
-  interval_seconds: 30
+  # Size this against chrony's refclock poll so chronyd gets at least two samples
+  # per poll: 2^poll >= 2 * interval_seconds. This pairs with `poll 4` (16 s) in
+  # chrony.gateway.conf. If they are too close (e.g. a 30 s interval with `poll 5`
+  # = 32 s), jitter leaves many polls empty and chronyd is slow to select the
+  # source and step a large initial offset. For lower steady-state load use
+  # interval_seconds: 30 with `poll 6` (64 s).
+  interval_seconds: 8
   burst_samples: 5
   min_good_samples: 3
   max_rtt_ms: 300
   outlier_threshold_ms: 100
 
 chrony:
-  sock_path: "/run/chronos/chrony.sock"
+  # chronyd creates this socket in its own runtime directory (/run/chrony) as
+  # root; the gateway must be able to write to it (run the gateway as root). The
+  # path and refid must match chrony.gateway.conf.
+  sock_path: "/run/chrony/chronos.sock"
   refid: "CHRO"
 
 security:

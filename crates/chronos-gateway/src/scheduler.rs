@@ -255,7 +255,7 @@ mod tests {
             sampler(),
             Duration::from_secs(30),
             output.clone(),
-            SharedStatus::new("/run/chronos/chrony.sock"),
+            SharedStatus::new("/run/chrony/chronos.sock"),
         );
 
         assert!(scheduler.run_round().await);
@@ -281,7 +281,7 @@ mod tests {
             sampler(),
             Duration::from_secs(30),
             output.clone(),
-            SharedStatus::new("/run/chronos/chrony.sock"),
+            SharedStatus::new("/run/chrony/chronos.sock"),
         );
 
         assert!(!scheduler.run_round().await);
@@ -303,7 +303,7 @@ mod tests {
             sampler(),
             Duration::from_secs(30),
             output.clone(),
-            SharedStatus::new("/run/chronos/chrony.sock"),
+            SharedStatus::new("/run/chrony/chronos.sock"),
         );
 
         // A failed chrony write does not invalidate a good backend sample.

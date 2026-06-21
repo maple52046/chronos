@@ -43,28 +43,33 @@ offset  size  field                      type
 See [`examples/config/chrony.gateway.conf`](../examples/config/chrony.gateway.conf):
 
 ```conf
-refclock SOCK /run/chronos/chrony.sock refid CHRO poll 4 filter 8
-allow 192.168.100.0/24
-# local stratum 10   # optional isolated-mode fallback, disabled by default
+refclock SOCK /run/chrony/chronos.sock refid CHRO poll 4 filter 8
+# allow 192.168.100.0/24      # optional: serve NTP to the internal network
+# local stratum 10            # optional isolated-mode fallback, disabled by default
 ```
 
 The `SOCK` socket path and `refid` must match the gateway's `chrony.sock_path`
-and `chrony.refid` settings.
+and `chrony.refid` settings. Size `poll` so chronyd gets at least two samples
+per poll (`2^poll >= 2 * sampling.interval_seconds`); see
+[`deployment-gateway.md`](deployment-gateway.md). A large initial offset is
+stepped by `makestep` (present in the Debian/Ubuntu default `chrony.conf`).
 
-## Shared runtime directory
+## Runtime directory and socket permissions
 
-`chronyd` creates `/run/chronos/chrony.sock`; `chronos-gateway` writes to it. The
-socket permissions must let the gateway write. Provision the directory with the
-shipped tmpfiles fragment
-([`packaging/tmpfiles.d/chronos.conf`](../packaging/tmpfiles.d/chronos.conf)):
+`chronyd` creates the socket inside its own runtime directory
+(`/run/chrony/chronos.sock` on Debian/Ubuntu). It creates the socket while
+running as **root**, so the socket is owned by root (`srwxr-xr-x`). chrony has no
+option to relax the SOCK permissions, so **`chronos-gateway` must run as root**
+to write samples to it:
 
-```conf
-d /run/chronos 0755 chronos chronos -
-```
+- Container: `user: "0:0"` and bind-mount `/run/chrony` (see
+  [`examples/compose/docker-compose.gateway.yml`](../examples/compose/docker-compose.gateway.yml)).
+- systemd: the shipped unit runs as root with `ReadWritePaths=/run/chrony`.
 
-If `chronyd` runs as a different user, adjust ownership accordingly:
+Confirm who owns the socket and dir if writes fail:
 
 ```bash
+ls -l /run/chrony/chronos.sock
 ps -eo user,group,comm | grep chronyd
 ```
 

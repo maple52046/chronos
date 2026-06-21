@@ -39,15 +39,38 @@ use crate::status_api::SharedStatus;
 )]
 struct Cli {
     /// Path to the YAML configuration file.
-    #[arg(long, value_name = "FILE", default_value = "/etc/chronos/gateway.yaml")]
+    #[arg(
+        long,
+        value_name = "FILE",
+        global = true,
+        default_value = "/etc/chronos/gateway.yaml"
+    )]
     config: PathBuf,
+    /// Optional subcommand; absent runs the gateway.
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+/// `chronos-gateway` subcommands.
+#[derive(Debug, clap::Subcommand)]
+enum Command {
+    /// Probe the local status endpoint and exit non-zero if unhealthy.
+    ///
+    /// Intended as a container `HEALTHCHECK`, replacing a `curl` dependency.
+    Healthcheck,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    ensure_crypto_provider();
     let cli = Cli::parse();
     let config = GatewayConfig::load(&cli.config)
         .with_context(|| format!("loading configuration from {}", cli.config.display()))?;
+
+    if matches!(cli.command, Some(Command::Healthcheck)) {
+        return run_healthcheck(&config);
+    }
+
     init_tracing(&config.logging)?;
     tracing::info!(
         backends = config.backends.len(),
@@ -92,6 +115,64 @@ async fn main() -> anyhow::Result<()> {
     Scheduler::new(clients, sampler, interval, output, status)
         .run()
         .await
+}
+
+/// Probes the local status endpoint, returning an error when not healthy.
+///
+/// Operational context: this backs the container `HEALTHCHECK` without a `curl`
+/// dependency, issuing a plain-HTTP request to the loopback status listener.
+fn run_healthcheck(config: &GatewayConfig) -> anyhow::Result<()> {
+    let addr: SocketAddr = config
+        .status
+        .listen
+        .parse()
+        .with_context(|| format!("parsing status listen address {}", config.status.listen))?;
+    probe_healthz(addr.port(), "/healthz")
+}
+
+/// Issues a minimal HTTP/1.0 GET to `http://127.0.0.1:<port><path>`.
+///
+/// Returns an error unless the response status is `200`.
+fn probe_healthz(port: u16, path: &str) -> anyhow::Result<()> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let addr = format!("127.0.0.1:{port}");
+    let mut stream = TcpStream::connect(&addr).with_context(|| format!("connecting to {addr}"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(3)))?;
+
+    let request = format!("GET {path} HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .context("sending health request")?;
+
+    let mut buf = Vec::new();
+    stream
+        .read_to_end(&mut buf)
+        .context("reading health response")?;
+    let head = String::from_utf8_lossy(&buf);
+    let status_line = head.lines().next().unwrap_or_default();
+    if status_line.split_whitespace().nth(1) == Some("200") {
+        Ok(())
+    } else {
+        anyhow::bail!("health endpoint not healthy: {status_line:?}")
+    }
+}
+
+/// Installs the ring `CryptoProvider` as the process default for rustls, once.
+///
+/// Rationale: the workspace pins rustls to the ring backend and reqwest's
+/// `rustls-no-provider` feature requires a process-level default provider to be
+/// installed before any client is built. Guarded by `Once` so it is safe to
+/// call from both the binary entry point and each client constructor.
+pub(crate) fn ensure_crypto_provider() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        // An error means a provider is already installed, which is fine.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
 }
 
 /// Binds and spawns the local status HTTP server.

@@ -5,8 +5,10 @@ Wants=network-online.target chronyd.service
 
 [Service]
 Type=simple
-User=chronos
-Group=chronos
+# Runs as root: chronyd creates the SOCK refclock socket owned by root, so the
+# gateway must be root to write samples to it.
+User=root
+Group=root
 ExecStart=/usr/local/bin/chronos-gateway --config /etc/chronos/gateway.yaml
 Restart=always
 RestartSec=5
@@ -15,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/run/chronos
+ReadWritePaths=/run/chrony
 
 [Install]
 WantedBy=multi-user.target

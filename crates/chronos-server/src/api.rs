@@ -181,6 +181,7 @@ mod tests {
     }
 
     async fn spawn_with_prefix(state: AppState, base_path: &str) -> SocketAddr {
+        crate::ensure_crypto_provider();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind ephemeral port");

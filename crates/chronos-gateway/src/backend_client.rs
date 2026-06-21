@@ -71,6 +71,8 @@ impl BackendClient {
             .evaluate(transport)
             .with_context(|| format!("backend {} rejected by security policy", config.name))?;
 
+        // reqwest's `rustls-no-provider` requires an installed default provider.
+        crate::ensure_crypto_provider();
         let mut builder = reqwest::Client::builder().timeout(request_timeout);
         if matches!(transport, BackendTransport::Https) && !pinned_spki.is_empty() {
             // Pinning subsumes standard verification: the custom verifier runs

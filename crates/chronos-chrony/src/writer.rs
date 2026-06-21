@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn sends_encoded_sample_to_listening_socket() {
         let dir = unique_dir();
-        let sock_path = dir.join("chrony.sock");
+        let sock_path = dir.join("chronos.sock");
         let listener = UnixDatagram::bind(&sock_path).expect("bind listener");
 
         let backend = ChronySockRefclockBackend::new(&sock_path);
@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn errors_when_socket_is_missing() {
-        let backend = ChronySockRefclockBackend::new("/nonexistent/chronos/chrony.sock");
+        let backend = ChronySockRefclockBackend::new("/nonexistent/chronos.sock");
         let sample = TimeSample {
             backend_name: "primary".to_string(),
             server_send_unix_nanos: 0,

@@ -108,12 +108,14 @@ fn default_cache_control() -> String {
 /// Time-status provider configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TimeStatusConfig {
-    /// Provider identifier; `chrony` shells out to `chronyc`, others are inert.
+    /// Provider identifier: `system` (default) reads the kernel NTP state via
+    /// `adjtimex` and works with any disciplining daemon; `chrony` queries
+    /// `chronyd` over its command protocol; any other value is inert (unknown).
     #[serde(default = "default_provider")]
     pub provider: String,
-    /// Path to the `chronyc` binary used by the chrony provider.
-    #[serde(default = "default_chronyc_path")]
-    pub chronyc_path: PathBuf,
+    /// Address of `chronyd`'s command socket, used by the `chrony` provider.
+    #[serde(default = "default_chrony_address")]
+    pub chrony_address: String,
     /// Whether an `unknown` sync status is acceptable when reporting health.
     #[serde(default)]
     pub allow_unknown_status: bool,
@@ -123,18 +125,18 @@ impl Default for TimeStatusConfig {
     fn default() -> Self {
         Self {
             provider: default_provider(),
-            chronyc_path: default_chronyc_path(),
+            chrony_address: default_chrony_address(),
             allow_unknown_status: false,
         }
     }
 }
 
 fn default_provider() -> String {
-    "chrony".to_string()
+    "system".to_string()
 }
 
-fn default_chronyc_path() -> PathBuf {
-    PathBuf::from("/usr/bin/chronyc")
+fn default_chrony_address() -> String {
+    "127.0.0.1:323".to_string()
 }
 
 impl ServerConfig {
@@ -183,8 +185,7 @@ tls:
 api:
   cache_control: "no-store"
 time_status:
-  provider: "chrony"
-  chronyc_path: "/usr/bin/chronyc"
+  provider: "system"
   allow_unknown_status: false
 logging:
   level: "info"

@@ -127,6 +127,7 @@ sKwsujLyE0Ku/cUve8rRF7iq
 
     #[tokio::test]
     async fn https_listener_serves_time_over_tls() {
+        crate::ensure_crypto_provider();
         let cert_path = unique_temp("chronos-cert");
         let key_path = unique_temp("chronos-key");
         std::fs::write(&cert_path, TEST_CERT).expect("write cert");

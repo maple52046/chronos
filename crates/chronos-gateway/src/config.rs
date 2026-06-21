@@ -242,7 +242,7 @@ sampling:
   max_rtt_ms: 300
   outlier_threshold_ms: 100
 chrony:
-  sock_path: "/run/chronos/chrony.sock"
+  sock_path: "/run/chrony/chronos.sock"
   refid: "CHRO"
 security:
   allow_plain_http_backends: false
@@ -269,7 +269,7 @@ backends:
     require_tls: false
     require_valid_cert: false
 chrony:
-  sock_path: "/run/chronos/chrony.sock"
+  sock_path: "/run/chrony/chronos.sock"
 security:
   allow_plain_http_backends: true
   allow_plain_http_loopback: true
@@ -288,7 +288,7 @@ backends:
   - name: "primary"
     base_url: "https://time.example.com"
 chrony:
-  sock_path: "/run/chronos/chrony.sock"
+  sock_path: "/run/chrony/chronos.sock"
 security:
   pinned_spki:
     - "ToXX6YsrFz2DC4I6K/IxLdW9np+HHirOUAfxobC/jCI="
@@ -304,7 +304,7 @@ backends:
   - name: "primary"
     base_url: "https://time.example.com"
 chrony:
-  sock_path: "/run/chronos/chrony.sock"
+  sock_path: "/run/chrony/chronos.sock"
 security:
   pinned_spki:
     - "not-a-valid-pin"
@@ -323,7 +323,7 @@ sampling:
   burst_samples: 3
   min_good_samples: 5
 chrony:
-  sock_path: "/run/chronos/chrony.sock"
+  sock_path: "/run/chrony/chronos.sock"
 "#;
         let cfg: GatewayConfig = serde_yaml::from_str(yaml).expect("valid yaml");
         assert!(cfg.validate().is_err());

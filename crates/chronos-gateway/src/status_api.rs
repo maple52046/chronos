@@ -165,6 +165,7 @@ mod tests {
     }
 
     async fn spawn(status: SharedStatus) -> SocketAddr {
+        crate::ensure_crypto_provider();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind");
@@ -177,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn healthz_returns_ok() {
-        let addr = spawn(SharedStatus::new("/run/chronos/chrony.sock")).await;
+        let addr = spawn(SharedStatus::new("/run/chrony/chronos.sock")).await;
         let body: serde_json::Value = reqwest::get(format!("http://{addr}/healthz"))
             .await
             .expect("request")
@@ -189,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn status_reflects_recorded_sample() {
-        let status = SharedStatus::new("/run/chronos/chrony.sock");
+        let status = SharedStatus::new("/run/chrony/chronos.sock");
         status.update_state(GatewayState::Synchronized);
         status.record_sample(
             "primary",
