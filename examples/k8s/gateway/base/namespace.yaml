@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chronos
+  labels:
+    # Gateway overlays need privileged Pod Security for hostIPC (ntpd/ntpsec) or
+    # hostPath/root socket access (chrony).
+    pod-security.kubernetes.io/enforce: privileged

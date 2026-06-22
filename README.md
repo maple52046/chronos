@@ -6,9 +6,9 @@ outbound NTP. A `chronos-gateway` samples time from a `chronos-server` over
 HTTP/HTTPS and feeds the samples to a local `chronyd` via chrony's SOCK
 refclock; `chronyd` then disciplines the host clock and serves NTP internally.
 
-```text
-chronos-server  --HTTP/HTTPS-->  chronos-gateway  --SOCK refclock-->  chronyd  --NTP-->  internal servers
-```
+## System Architecture
+
+![Chronos system architecture](docs/chronos-system-architecture.svg)
 
 ## Components
 
@@ -76,6 +76,22 @@ docker push "ghcr.io/maple52046/chronos:1.0.0-${TS}"
 ```
 
 See [`examples/compose`](examples/compose).
+
+## Kubernetes
+
+Gateway Kubernetes manifests live under [`examples/k8s/gateway`](examples/k8s/gateway).
+Shared resources are kept in `base/`; choose one daemon-specific overlay for the
+node-local NTP daemon:
+
+```bash
+kubectl apply -k examples/k8s/gateway/ntpsec
+kubectl apply -k examples/k8s/gateway/ntpd
+kubectl apply -k examples/k8s/gateway/chrony
+```
+
+Before applying, edit the selected overlay's `configmap.yaml` and set
+`data.gateway.yaml -> backends[0].base_url` to the Chronos server URL. See the
+gateway example README for daemon prerequisites and verification steps.
 
 ## Documentation
 

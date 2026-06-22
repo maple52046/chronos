@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chronos-gateway-config
+  namespace: chronos
+data:
+  gateway.yaml: |
+    backends:
+      - name: "primary"
+        # Base URL of the Chronos server; the gateway appends "/time". Include
+        # the server's api.base_path here when set.
+        base_url: "https://xfarms.io/chronos"
+        require_tls: true
+        require_valid_cert: true
+
+    sampling:
+      # poll 4 (16s) in chrony.conf wants >= 2 samples/poll, so interval 8s.
+      interval_seconds: 8
+      burst_samples: 5
+      min_good_samples: 3
+      max_rtt_ms: 300
+      outlier_threshold_ms: 100
+
+    # chrony SOCK refclock. chronyd creates the socket as root in /run/chrony,
+    # so the gateway pod must run as root and mount the host /run/chrony. The
+    # sock_path and refid must match the node's chrony refclock directive
+    # (e.g. /etc/chrony/conf.d/chronos.conf):
+    #   refclock SOCK /run/chrony/chronos.sock refid CHRO poll 4 filter 8
+    output:
+      type: chrony_sock
+      sock_path: "/run/chrony/chronos.sock"
+      refid: "CHRO"
+
+    security:
+      allow_plain_http_backends: false
+      allow_plain_http_loopback: true
+      pinned_spki: []
+
+    status:
+      listen: "127.0.0.1:9090"
+
+    logging:
+      level: "info"
+      format: "json"

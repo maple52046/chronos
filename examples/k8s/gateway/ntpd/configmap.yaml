@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chronos-gateway-config
+  namespace: chronos
+data:
+  gateway.yaml: |
+    backends:
+      - name: "primary"
+        # Base URL of the Chronos server; the gateway appends "/time". Include
+        # the server's api.base_path here when set, e.g.
+        # "https://time.example.com/chronos".
+        base_url: "https://xfarms.io/chronos"
+        require_tls: true
+        require_valid_cert: true
+
+    sampling:
+      interval_seconds: 8
+      burst_samples: 5
+      min_good_samples: 3
+      max_rtt_ms: 300
+      outlier_threshold_ms: 100
+
+    # classic ntpd SHM refclock. Configure the node daemon with:
+    #   server 127.127.28.2 mode 1 prefer
+    #   fudge 127.127.28.2 refid SHM
+    output:
+      type: ntp_shm
+      unit: 2
+      perm: "0666"
+      precision: -1
+
+    security:
+      allow_plain_http_backends: false
+      allow_plain_http_loopback: true
+      pinned_spki: []
+
+    status:
+      listen: "127.0.0.1:9090"
+
+    logging:
+      level: "info"
+      format: "json"

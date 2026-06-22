@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chronos-gateway
+  namespace: chronos
+spec:
+  template:
+    spec:
+      hostIPC: false
+      securityContext:
+        # chrony_sock writes chronyd's root-owned SOCK refclock socket.
+        runAsNonRoot: false
+        runAsUser: 0
+        runAsGroup: 0
+      containers:
+        - name: chronos-gateway
+          securityContext:
+            capabilities:
+              add:
+                # Allows uid 0 in the pod to traverse chronyd's private runtime
+                # directory when it is owned by the host's _chrony user.
+                - DAC_OVERRIDE
+          volumeMounts:
+            - name: run-chrony
+              mountPath: /run/chrony
+      volumes:
+        - name: run-chrony
+          hostPath:
+            path: /run/chrony
+            type: Directory
